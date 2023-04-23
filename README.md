@@ -1,0 +1,1 @@
+Simple REST application that performs a token exchange between the OpenShift Console and Dex to support the gitops-admin-plugin.
