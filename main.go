@@ -15,6 +15,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// TODO: Look at providing a namespace instead of Host, Path, Protocol and
+// have the service figure out the route to Argo instead of the console plugin.
+// I'm a bit concerned that this service being used to exfiltrate OAuth Tokens
 type endpointInfo struct {
 	Host     string `json:"host"`
 	Path     string `json:"path"`
@@ -32,8 +35,9 @@ func main() {
 	router := gin.Default()
 	router.POST("/token", exchangeToken)
 
-	router.Run("localhost:8080")
-	//router.RunTLS("localhost:8080")
+	//router.Run("localhost:8080")
+	// TODO: Put certs in better spot like /etc/ssl/certs
+	router.RunTLS("localhost:8443", "/mnt/certs/tls.crt", "mnt/certs/tls.key")
 }
 
 func exchangeToken(c *gin.Context) {
