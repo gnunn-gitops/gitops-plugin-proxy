@@ -37,7 +37,7 @@ func main() {
 
 	//router.Run("localhost:8080")
 	// TODO: Put certs in better spot like /etc/ssl/certs
-	router.RunTLS("localhost:8443", "/mnt/certs/tls.crt", "mnt/certs/tls.key")
+	router.RunTLS("0.0.0.0:8443", "/mnt/certs/tls.crt", "mnt/certs/tls.key")
 }
 
 func exchangeToken(c *gin.Context) {
