@@ -30,10 +30,9 @@ func main() {
 	router.GET("/*ignore", ReverseProxy())
 	router.POST("/*ignore", ReverseProxy())
 
-	router.Run("localhost:8080")
+	//router.Run("localhost:8080")
 	// TODO: Put certs in better spot like /etc/ssl/certs
-	//router.RunTLS("0.0.0.0:8443", "/mnt/certs/tls.crt", "mnt/certs/tls.key")
-
+	router.RunTLS("0.0.0.0:8443", "/mnt/certs/tls.crt", "mnt/certs/tls.key")
 }
 
 // Generic reverse proxy for Argo CD APIs
@@ -45,21 +44,33 @@ func ReverseProxy() gin.HandlerFunc {
 		director := func(req *http.Request) {
 			host := getArgoServerHost(c.GetHeader("namespace"), os.Getenv("SUBDOMAIN"))
 
-			log.Println(fmt.Printf("%s https://%s", c.Request.Method, host+c.Request.RequestURI))
+			log.Printf("%s https://%s", req.Method, host+c.Request.RequestURI)
 
 			req.URL.Scheme = "https"
 			req.URL.Host = host
+			req.Host = host
+
+			log.Println("Request URL " + req.URL.String())
 
 			token, err := exchangeToken(c)
-			if err != nil {
-				req.Header.Set("Authentication", "Bearer "+token)
+			if err == nil {
+				req.Header.Set("Authorization", "Bearer "+token)
 			} else {
 				log.Println("Unexpected error retrieving token", err)
 			}
 			delete(req.Header, "namespace")
-
 		}
 		proxy := &httputil.ReverseProxy{Director: director}
+		proxy.ModifyResponse = func(r *http.Response) error {
+			location, err := r.Location()
+			if err != nil {
+				log.Printf("Location: %v", location)
+			}
+
+			log.Printf("Request URL in response: %v", r.Request.URL)
+			log.Printf("Response status: %d", r.StatusCode)
+			return nil
+		}
 		proxy.ServeHTTP(c.Writer, c.Request)
 	}
 }
@@ -84,6 +95,8 @@ func exchangeToken(c *gin.Context) (string, error) {
 	}
 	token = token[7:]
 
+	log.Println("Received Token: " + token)
+
 	data := url.Values{}
 	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
 	data.Set("audience", "openshift")
@@ -91,7 +104,7 @@ func exchangeToken(c *gin.Context) (string, error) {
 	data.Add("subject_token_type", "urn:ietf:params:oauth:token-type:access_token")
 	data.Add("requested_token_type", "urn:ietf:params:oauth:token-type:id_token")
 	data.Add("scope", "email groups")
-	data.Add("resource", "argo-cd")
+	data.Add("resource", "argo-cd-cli")
 	encodedData := data.Encode()
 
 	client := &http.Client{
@@ -106,6 +119,7 @@ func exchangeToken(c *gin.Context) (string, error) {
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
+	log.Println("Calling host for token exchange: " + req.Host + req.RequestURI)
 	response, err := client.Do(req)
 	if err != nil {
 		log.Println(fmt.Errorf("Error calling %s", err.Error()))
