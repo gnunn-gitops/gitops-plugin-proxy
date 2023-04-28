@@ -1,4 +1,4 @@
-module gitops/plugin-token-exchange
+module gitops/plugin-proxy
 
 go 1.20
 

@@ -29,7 +29,6 @@ func main() {
 	router.GET("/*ignore", ReverseProxy())
 	router.POST("/*ignore", ReverseProxy())
 
-	//router.Run("localhost:8080")
 	// TODO: Put certs in better spot like /etc/ssl/certs
 	router.RunTLS("0.0.0.0:8443", "/mnt/certs/tls.crt", "mnt/certs/tls.key")
 }
@@ -84,7 +83,8 @@ func getArgoServerHost(namespace string) string {
 		return "openshift-gitops-server." + namespace + ".svc.cluster.local"
 	} else {
 		// Making instance that argo instance in other instances are called argocd
-		// Probably want to look up the route as a better way
+		// Probably want to look up the service as a more robust option but
+		// that would require the pod SA have rights to view other namespaces.
 		return "argocd-server." + namespace + ".svc.cluster.local"
 	}
 }

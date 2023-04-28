@@ -9,11 +9,10 @@ RUN go build
 
 FROM registry.access.redhat.com/ubi8-minimal:8.7
 
-COPY --from=build-stage /opt/app-root/src/plugin-token-exchange /usr/bin/plugin-token-exchange
+COPY --from=build-stage /opt/app-root/src/plugin-proxy /usr/bin/plugin-proxy
 
-EXPOSE 8080
-#EXPOSE 8443
+EXPOSE 8443
 
 USER 1001
 
-ENTRYPOINT ["/usr/bin/plugin-token-exchange"]
+ENTRYPOINT ["/usr/bin/plugin-proxy"]
