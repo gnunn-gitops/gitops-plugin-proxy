@@ -27,6 +27,7 @@ type tokenResponse struct {
 var cache = ttlcache.New(
 	ttlcache.WithDisableTouchOnHit[string, string](),
 	ttlcache.WithTTL[string, string](24*time.Hour),
+	ttlcache.WithCapacity[string, string](1000),
 )
 
 func main() {
