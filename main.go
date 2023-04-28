@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jellydator/ttlcache/v3"
 )
 
 type tokenResponse struct {
@@ -23,7 +24,13 @@ type tokenResponse struct {
 	ExpiresIn       int32  `json:"expires_in"`
 }
 
+var cache = ttlcache.New(
+	ttlcache.WithDisableTouchOnHit[string, string](),
+	ttlcache.WithTTL[string, string](24*time.Hour),
+)
+
 func main() {
+
 	router := gin.Default()
 
 	router.GET("/*ignore", ReverseProxy())
@@ -41,8 +48,6 @@ func ReverseProxy() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		director := func(req *http.Request) {
 
-			log.Printf("Original request: %s", c.Request.Host+c.Request.RequestURI)
-
 			host := getArgoServerHost(c.GetHeader("namespace"))
 
 			log.Printf("%s http://%s", req.Method, host+c.Request.RequestURI)
@@ -50,8 +55,6 @@ func ReverseProxy() gin.HandlerFunc {
 			req.URL.Scheme = "http"
 			req.URL.Host = host
 			req.Host = host
-
-			log.Println("Request URL " + req.URL.String())
 
 			token, err := exchangeToken(c)
 			if err == nil {
@@ -62,16 +65,6 @@ func ReverseProxy() gin.HandlerFunc {
 			delete(req.Header, "namespace")
 		}
 		proxy := &httputil.ReverseProxy{Director: director}
-		proxy.ModifyResponse = func(r *http.Response) error {
-			location, err := r.Location()
-			if err != nil {
-				log.Printf("Location: %v", location)
-			}
-
-			log.Printf("Request URL in response: %v", r.Request.URL)
-			log.Printf("Response status: %d", r.StatusCode)
-			return nil
-		}
 		proxy.ServeHTTP(c.Writer, c.Request)
 	}
 }
@@ -97,7 +90,14 @@ func exchangeToken(c *gin.Context) (string, error) {
 	}
 	token = token[7:]
 
-	log.Println("Received Token: " + token)
+	host := getArgoServerHost(c.GetHeader("namespace"))
+
+	// Check if we have token in cache
+	var key = token + "@" + host
+	item := cache.Get(key)
+	if item != nil {
+		return item.Value(), nil
+	}
 
 	data := url.Values{}
 	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
@@ -113,7 +113,6 @@ func exchangeToken(c *gin.Context) (string, error) {
 		Timeout: time.Second * 10,
 	}
 
-	host := getArgoServerHost(c.GetHeader("namespace"))
 	req, err := http.NewRequest("POST", "http://"+host+"/api/dex/token", strings.NewReader(encodedData))
 	if err != nil {
 		log.Println(fmt.Errorf("Error constructing request %s", err.Error()))
@@ -141,6 +140,9 @@ func exchangeToken(c *gin.Context) (string, error) {
 		log.Println(fmt.Errorf("Error unmarshalling body %s", err.Error()))
 		return "", err
 	}
+
+	expires := time.Duration(int64(accessToken.ExpiresIn) * 1000000000)
+	cache.Set(key, accessToken.AccessToken, expires)
 
 	return accessToken.AccessToken, nil
 }
