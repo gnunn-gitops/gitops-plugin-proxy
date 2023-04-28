@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -42,11 +41,14 @@ func ReverseProxy() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		director := func(req *http.Request) {
-			host := getArgoServerHost(c.GetHeader("namespace"), os.Getenv("SUBDOMAIN"))
 
-			log.Printf("%s https://%s", req.Method, host+c.Request.RequestURI)
+			log.Printf("Original request: %s", c.Request.Host+c.Request.RequestURI)
 
-			req.URL.Scheme = "https"
+			host := getArgoServerHost(c.GetHeader("namespace"))
+
+			log.Printf("%s http://%s", req.Method, host+c.Request.RequestURI)
+
+			req.URL.Scheme = "http"
 			req.URL.Host = host
 			req.Host = host
 
@@ -77,13 +79,13 @@ func ReverseProxy() gin.HandlerFunc {
 
 // Get location of Argo Server Host based on namespace requested.
 // The namespace is passed in by the front-end via a Header
-func getArgoServerHost(namespace string, subdomain string) string {
+func getArgoServerHost(namespace string) string {
 	if namespace == "openshift-gitops" {
-		return "openshift-gitops-server-openshift-gitops." + subdomain
+		return "openshift-gitops-server." + namespace + ".svc.cluster.local"
 	} else {
 		// Making instance that argo instance in other instances are called argocd
 		// Probably want to look up the route as a better way
-		return "argocd-server-" + namespace + "." + subdomain
+		return "argocd-server." + namespace + ".svc.cluster.local"
 	}
 }
 
@@ -111,8 +113,8 @@ func exchangeToken(c *gin.Context) (string, error) {
 		Timeout: time.Second * 10,
 	}
 
-	host := getArgoServerHost(c.GetHeader("namespace"), os.Getenv("SUBDOMAIN"))
-	req, err := http.NewRequest("POST", "https://"+host+"/api/dex/token", strings.NewReader(encodedData))
+	host := getArgoServerHost(c.GetHeader("namespace"))
+	req, err := http.NewRequest("POST", "http://"+host+"/api/dex/token", strings.NewReader(encodedData))
 	if err != nil {
 		log.Println(fmt.Errorf("Error constructing request %s", err.Error()))
 		return "", err
